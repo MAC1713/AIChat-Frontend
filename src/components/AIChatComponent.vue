@@ -1,31 +1,36 @@
 <template>
-  <div class="chat-container">
+  <div class="chat-container" :class="{ 'menu-open': isMenuOpen }">
     <div class="menu-button" @click="toggleMenu">
       <img src="/menu.jpg" alt="Menu" />
     </div>
-    <side-menu v-if="isMenuOpen" />
-    <div class="chat-messages" ref="chatMessages">
-      <div
-        v-for="(message, index) in showMessage"
-        :key="index"
-        :class="['message', message.role]"
-      >
-        <img
-          v-if="message.role === 'assistant'"
-          src="/Emma.png"
-          alt="AI Avatar"
-          class="avatar"
-        />
-        <div class="message-content" v-html="formatMessage(message.content)"></div>
+    <side-menu v-if="isMenuOpen" @close-menu="closeMenu" />
+    <div class="chat-content" @click="closeMenu">
+      <div class="chat-messages" ref="chatMessages">
+        <div
+          v-for="(message, index) in showMessage"
+          :key="index"
+          :class="['message', message.role]"
+        >
+          <img
+            v-if="message.role === 'assistant'"
+            src="/Emma.png"
+            alt="AI Avatar"
+            class="avatar"
+          />
+          <div class="message-content" v-html="formatMessage(message.content)"></div>
+        </div>
       </div>
-    </div>
-    <div class="chat-input">
-      <input
-        v-model="userInput"
-        @keyup.enter="sendMessage"
-        placeholder="Type your message here..."
-      />
-      <button @click="sendMessage">Send</button>
+      <div class="chat-input">
+        <textarea
+          v-model="userInput"
+          @keydown.enter.prevent="handleEnter"
+          @keydown.ctrl.enter="handleCtrlEnter"
+          @keydown.meta.enter="handleMetaEnter"
+          @keydown.shift.enter="handleShiftEnter"
+          placeholder="Type your message here..."
+        ></textarea>
+        <button @click="sendMessage">Send</button>
+      </div>
     </div>
   </div>
 </template>
@@ -48,6 +53,7 @@ export default defineComponent({
     const messageCount = ref(0);
     const chatMessages = ref<HTMLDivElement | null>(null);
     const isMenuOpen = ref(false);
+    const isComposing = ref(false);
 
     const sendMessage = async () => {
       if (!userInput.value.trim()) return;
@@ -95,8 +101,42 @@ export default defineComponent({
       return formatSpecialText(content);
     };
 
+    const handleEnter = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+        // 不阻止默认行为，允许换行
+        return;
+      }
+      sendMessage();
+    };
+
+    const handleCtrlEnter = () => {
+      userInput.value += '\n';
+    };
+
+    const handleMetaEnter = () => {
+      userInput.value += '\n';
+    };
+
+    const handleShiftEnter = () => {
+      userInput.value += '\n';
+    };
+
+    const closeMenu = () => {
+      if (isMenuOpen.value) {
+        isMenuOpen.value = false;
+      }
+    };
+
     onMounted(() => {
       scrollToBottom();
+      if (chatMessages.value) {
+        chatMessages.value.addEventListener('compositionstart', () => {
+          isComposing.value = true;
+        });
+        chatMessages.value.addEventListener('compositionend', () => {
+          isComposing.value = false;
+        });
+      }
     });
 
     return {
@@ -108,6 +148,11 @@ export default defineComponent({
       isMenuOpen,
       toggleMenu,
       formatMessage,
+      handleEnter,
+      handleCtrlEnter,
+      handleMetaEnter,
+      handleShiftEnter,
+      closeMenu,
     };
   },
 });
@@ -116,25 +161,38 @@ export default defineComponent({
 <style scoped>
 .chat-container {
   display: flex;
-  flex-direction: column;
   height: 100vh;
-  max-width: 800px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 20px;
   box-sizing: border-box;
   position: relative;
+  overflow: hidden;
+  transition: padding-left 0.3s ease;
+}
+
+.chat-container.menu-open {
+  padding-left: 180px;
 }
 
 .menu-button {
-  position: absolute;
+  position: fixed;
   top: 10px;
-  left: 10px;
+  left: 16px;
   cursor: pointer;
+  z-index: 1000;
 }
 
 .menu-button img {
-  width: 24px;
-  height: 24px;
+  width: 61px;
+  height: 61px;
+}
+
+.chat-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 20px;
+  padding-left: 50px;
 }
 
 .chat-messages {
@@ -152,6 +210,8 @@ export default defineComponent({
   padding: 10px;
   border-radius: 8px;
   max-width: 70%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .user {
@@ -170,15 +230,46 @@ export default defineComponent({
   height: 40px;
   border-radius: 50%;
   margin-right: 10px;
+  flex-shrink: 0;
 }
 
 .message-content {
   flex: 1;
+  min-width: 0; /* 这行很重要，允许flex item缩小到比其内容更小 */
 }
 
 .chat-input {
   display: flex;
-  gap: 10px;
+  margin-top: 20px;
+}
+
+.chat-input textarea {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  min-height: 40px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.chat-input button {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.chat-input button:hover {
+  background-color: #45a049;
 }
 
 input {
