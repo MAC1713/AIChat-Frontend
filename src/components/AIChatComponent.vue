@@ -1,43 +1,55 @@
 <template>
-  <div class="chat-container" :class="{ 'menu-open': isMenuOpen }">
-    <div class="menu-button" @click="toggleMenu">
-      <img src="/menu.jpg" alt="Menu" />
-    </div>
-    <side-menu v-if="isMenuOpen" @close-menu="closeMenu" />
-    <div class="chat-content" @click="closeMenu">
+  <div class="chat-container" :class="{ 'dark-mode': isDarkMode }">
+    <header class="chat-header">
+      <button class="menu-button" @click="toggleMenu">
+        <img :src="isDarkMode ? '/menu-dark.jpg' : '/menu-light.jpg'" alt="Menu" />
+      </button>
+      <h1>AI Chat</h1>
+      <button class="theme-toggle" @click="toggleTheme">
+        {{ isDarkMode ? '☀️' : '🌙' }}
+      </button>
+    </header>
+
+    <side-menu v-if="isMenuOpen" @close="closeMenu" />
+
+    <main class="chat-main" @click="closeMenu">
       <div class="chat-messages" ref="chatMessages">
         <div
-          v-for="(message, index) in showMessage"
+          v-for="(message, index) in messages"
           :key="index"
           :class="['message', message.role]"
         >
           <img
             v-if="message.role === 'assistant'"
-            src="/Emma.png"
+            :src="isDarkMode ? '/Emma-dark.png' : '/Emma-light.png'"
             alt="AI Avatar"
             class="avatar"
           />
           <div class="message-content" v-html="formatMessage(message.content)"></div>
         </div>
       </div>
+    </main>
+
+    <footer class="chat-footer">
       <div class="chat-input">
         <textarea
           v-model="userInput"
-          @keydown.enter.prevent="handleEnter"
-          @keydown.ctrl.enter="handleCtrlEnter"
-          @keydown.meta.enter="handleMetaEnter"
-          @keydown.shift.enter="handleShiftEnter"
+          @keydown="handleKeyDown"
+          @compositionstart="isComposing = true"
+          @compositionend="isComposing = false"
           placeholder="Type your message here..."
+          rows="1"
+          ref="textarea"
         ></textarea>
-        <button @click="sendMessage">Send</button>
+        <button @click="sendMessage" :disabled="!userInput.trim()">Send</button>
       </div>
-    </div>
+    </footer>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, nextTick } from 'vue';
-import { sendChatMessage, Message } from '../router/chatService';
+import { defineComponent, ref, onMounted, nextTick, watch } from 'vue';
+import { sendChatMessage, type Message, type ChatResponse } from '../router/chatService';
 import SideMenu from './SideMenu.vue';
 import { formatSpecialText } from '../utils/textFormatter';
 
@@ -48,42 +60,39 @@ export default defineComponent({
   },
   setup() {
     const userInput = ref('');
-    const conversationHistory = ref<Message[]>([]);
-    const showMessage = ref<Message[]>([]);
+    const messages = ref<Message[]>([]);
     const messageCount = ref(0);
     const chatMessages = ref<HTMLDivElement | null>(null);
     const isMenuOpen = ref(false);
     const isComposing = ref(false);
+    const textarea = ref<HTMLTextAreaElement | null>(null);
+    const isDarkMode = ref(false);
 
     const sendMessage = async () => {
       if (!userInput.value.trim()) return;
 
-      const userMessage = userInput.value;
-      showMessage.value.push({ role: 'user', content: userMessage });
+      const userMessage: Message = { role: 'user', content: userInput.value.trim() };
+      messages.value.push(userMessage);
       userInput.value = '';
 
       try {
-        const response = await sendChatMessage(
+        const response: ChatResponse = await sendChatMessage(
           messageCount.value,
-          userMessage,
-          conversationHistory.value
+          userMessage.content,
+          messages.value
         );
 
-        conversationHistory.value.push({
-          role: 'assistant',
-          content: response.aiMessage,
-        });
-        showMessage.value.push({
-          role: 'assistant',
-          content: response.aiMessage
-        });
-
+        messages.value = response.fullConversationHistory;
         messageCount.value = response.messageCount;
 
         await nextTick();
         scrollToBottom();
       } catch (error) {
         console.error('Error sending message:', error);
+        messages.value.push({
+          role: 'system',
+          content: 'An error occurred while sending the message. Please try again.'
+        });
       }
     };
 
@@ -97,62 +106,76 @@ export default defineComponent({
       isMenuOpen.value = !isMenuOpen.value;
     };
 
-    const formatMessage = (content: string) => {
-      return formatSpecialText(content);
-    };
-
-    const handleEnter = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.shiftKey) {
-        // 不阻止默认行为，允许换行
-        return;
-      }
-      sendMessage();
-    };
-
-    const handleCtrlEnter = () => {
-      userInput.value += '\n';
-    };
-
-    const handleMetaEnter = () => {
-      userInput.value += '\n';
-    };
-
-    const handleShiftEnter = () => {
-      userInput.value += '\n';
-    };
-
     const closeMenu = () => {
-      if (isMenuOpen.value) {
-        isMenuOpen.value = false;
+      isMenuOpen.value = false;
+    };
+
+    const formatMessage = (content: string) => {
+      // Preserve line breaks and escape HTML to prevent XSS
+      const escapedContent = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+      
+      // Replace newlines with <br> tags
+      const contentWithLineBreaks = escapedContent.replace(/\n/g, '<br>');
+      
+      // Apply special formatting (e.g., code blocks, highlights)
+      return formatSpecialText(contentWithLineBreaks);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && !event.shiftKey && !isComposing.value) {
+        event.preventDefault();
+        sendMessage();
       }
+    };
+
+    const adjustTextareaHeight = () => {
+      if (textarea.value) {
+        textarea.value.style.height = 'auto';
+        textarea.value.style.height = `${textarea.value.scrollHeight}px`;
+      }
+    };
+
+    const toggleTheme = () => {
+      isDarkMode.value = !isDarkMode.value;
+      localStorage.setItem('darkMode', isDarkMode.value.toString());
     };
 
     onMounted(() => {
       scrollToBottom();
-      if (chatMessages.value) {
-        chatMessages.value.addEventListener('compositionstart', () => {
-          isComposing.value = true;
-        });
-        chatMessages.value.addEventListener('compositionend', () => {
-          isComposing.value = false;
-        });
+      if (textarea.value) {
+        textarea.value.addEventListener('input', adjustTextareaHeight);
       }
+      const storedDarkMode = localStorage.getItem('darkMode');
+      if (storedDarkMode !== null) {
+        isDarkMode.value = storedDarkMode === 'true';
+      }
+    });
+
+    watch(messages, () => {
+      nextTick(() => {
+        scrollToBottom();
+      });
     });
 
     return {
       userInput,
-      conversationHistory,
-      showMessage,
+      messages,
       sendMessage,
       chatMessages,
       isMenuOpen,
       toggleMenu,
-      formatMessage,
-      handleEnter,
-      handleCtrlEnter,
-      handleMetaEnter,
-      handleShiftEnter,
       closeMenu,
+      formatMessage,
+      handleKeyDown,
+      isComposing,
+      textarea,
+      isDarkMode,
+      toggleTheme,
     };
   },
 });
@@ -161,25 +184,40 @@ export default defineComponent({
 <style scoped>
 .chat-container {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   max-width: 100%;
   margin: 0 auto;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-  transition: padding-left 0.3s ease;
+  font-family: Arial, sans-serif;
+  background-color: #f0f4f8;
+  color: #333;
+  transition: background-color 0.3s, color 0.3s;
 }
 
-.chat-container.menu-open {
-  padding-left: 180px;
+.chat-container.dark-mode {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
 }
 
-.menu-button {
-  position: fixed;
-  top: 10px;
-  left: 16px;
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background-color: #e0e0e0;
+  border-bottom: 1px solid #ccc;
+}
+
+.dark-mode .chat-header {
+  background-color: #16213e;
+  border-bottom-color: #444;
+}
+
+.menu-button, .theme-toggle {
+  background: none;
+  border: none;
   cursor: pointer;
-  z-index: 1000;
+  font-size: 1.5rem;
 }
 
 .menu-button img {
@@ -187,41 +225,29 @@ export default defineComponent({
   height: 61px;
 }
 
-.chat-content {
-  display: flex;
-  flex-direction: column;
+.chat-main {
   flex: 1;
-  padding: 20px;
-  padding-left: 50px;
+  overflow-y: auto;
+  padding: 1rem;
 }
 
 .chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .message {
   display: flex;
-  margin-bottom: 10px;
-  padding: 10px;
-  border-radius: 8px;
-  max-width: 70%;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  margin-bottom: 1rem;
+  max-width: 80%;
 }
 
 .user {
-  background-color: #e3f2fd;
   align-self: flex-end;
-  margin-left: auto;
+  flex-direction: row-reverse;
 }
 
 .assistant {
-  background-color: #f0f4c3;
   align-self: flex-start;
 }
 
@@ -229,81 +255,119 @@ export default defineComponent({
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  margin-right: 10px;
-  flex-shrink: 0;
+  margin: 0 0.5rem;
 }
 
 .message-content {
-  flex: 1;
-  min-width: 0; /* 这行很重要，允许flex item缩小到比其内容更小 */
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dark-mode .message-content {
+  background-color: #0f3460;
+}
+
+.user .message-content {
+  background-color: #007bff;
+  color: white;
+}
+
+.dark-mode .user .message-content {
+  background-color: #4a69bd;
+}
+
+.chat-footer {
+  padding: 1rem;
+  background-color: #e0e0e0;
+  border-top: 1px solid #ccc;
+}
+
+.dark-mode .chat-footer {
+  background-color: #16213e;
+  border-top-color: #444;
 }
 
 .chat-input {
   display: flex;
-  margin-top: 20px;
+  gap: 0.5rem;
 }
 
 .chat-input textarea {
   flex: 1;
-  padding: 10px;
-  font-size: 16px;
+  padding: 0.5rem;
+  font-size: 1rem;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  resize: vertical;
-  min-height: 40px;
-  max-height: 200px;
+  border-radius: 0.5rem;
+  resize: none;
   overflow-y: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  min-height: 20px;
+  max-height: 150px;
+}
+
+.dark-mode .chat-input textarea {
+  background-color: #2c3e50;
+  color: #e0e0e0;
+  border-color: #444;
 }
 
 .chat-input button {
-  padding: 10px 20px;
-  font-size: 16px;
-  background-color: #4caf50;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  background-color: #007bff;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 0.5rem;
   cursor: pointer;
-  margin-left: 10px;
+  transition: background-color 0.2s;
 }
 
 .chat-input button:hover {
-  background-color: #45a049;
+  background-color: #0056b3;
 }
 
-input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+.chat-input button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
-button {
-  padding: 10px 20px;
-  background-color: #4caf50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+.dark-mode .chat-input button {
+  background-color: #4a69bd;
 }
 
-button:hover {
-  background-color: #45a049;
+.dark-mode .chat-input button:hover {
+  background-color: #3498db;
 }
 
-/* 添加特殊格式文本的样式 */
-.code-block {
-  background-color: #f0f0f0;
-  padding: 10px;
-  border-radius: 4px;
+.dark-mode .chat-input button:disabled {
+  background-color: #34495e;
+}
+
+/* 特殊格式文本样式 */
+:deep(.code-block) {
+  background-color: #f8f8f8;
+  padding: 1rem;
+  border-radius: 0.5rem;
   font-family: monospace;
   white-space: pre-wrap;
+  overflow-x: auto;
 }
 
-.highlight {
-  background-color: yellow;
-  padding: 2px 4px;
-  border-radius: 2px;
+.dark-mode :deep(.code-block) {
+  background-color: #2c3e50;
+}
+
+:deep(.highlight) {
+  background-color: #ffff00;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.2rem;
+}
+
+.dark-mode :deep(.highlight) {
+  background-color: #ffa502;
+  color: #1a1a2e;
 }
 </style>
