@@ -61,25 +61,9 @@ app.whenReady().then(() => {
     }
   })
 
-  // 处理来自渲染进程的消息
-  ipcMain.on('send-message', (event, message) => {
-    console.log('Received message from renderer:', message)
-    // 在这里处理消息，比如发送到后端服务器
-  })
-
-  // 处理获取应用版本的请求
-  ipcMain.handle('get-app-version', () => {
-    return app.getVersion()
-  })
-
-  // 处理打开外部链接的请求
-  ipcMain.on('open-external-link', (event, url) => {
-    shell.openExternal(url)
-  })
-})
-
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
 })

@@ -1,32 +1,48 @@
 <template>
-  <div class="side-menu" :class="{ 'open': isOpen }">
+  <div class="side-menu" :class="{ 'open': isMenuOpen, 'dark-mode': isDarkMode }">
     <h2>Menu</h2>
     <ul>
-      <li>AI Chat</li>
+      <li @click="navigateTo('ai-chat')">AI Chat</li>
+      <li @click="navigateTo('notes')">Notes</li>
       <li>Settings</li>
-      <li>Notes</li>
       <li>Prompts</li>
       <li>API Key</li>
     </ul>
+    <button class="theme-toggle" @click="toggleTheme">
+      {{ isDarkMode ? '☀️' : '🌙' }}
+    </button>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue';
+import { defineComponent, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useThemeStore } from '@/stores/themeStore';
+import { useUIStore } from '@/stores/uiStore';
 
 export default defineComponent({
   name: 'SideMenu',
   setup() {
-    const isOpen = ref(false);
+    const router = useRouter();
+    const themeStore = useThemeStore();
+    const uiStore = useUIStore();
+    const isDarkMode = computed(() => themeStore.isDarkMode);
+    const isMenuOpen = computed(() => uiStore.isMenuOpen);
 
-    onMounted(() => {
-      setTimeout(() => {
-        isOpen.value = true;
-      }, 50);
-    });
+    const navigateTo = (route: string) => {
+      router.push({ name: route });
+      uiStore.toggleMenu();
+    };
+
+    const toggleTheme = () => {
+      themeStore.toggleTheme();
+    };
 
     return {
-      isOpen,
+      isMenuOpen,
+      isDarkMode,
+      navigateTo,
+      toggleTheme,
     };
   },
 });
@@ -43,12 +59,17 @@ export default defineComponent({
   padding: 20px;
   padding-top: 80px;
   box-shadow: 6px 0 5px rgba(0, 0, 0, 0.2);
-  transition: left 0.3s ease;
+  transition: left 0.3s ease, background-color 0.3s ease;
   z-index: 999;
 }
 
 .side-menu.open {
   left: 0;
+}
+
+.side-menu.dark-mode {
+  background-color: #333;
+  color: #fff;
 }
 
 ul {
@@ -63,5 +84,15 @@ li {
 
 li:hover {
   color: #4caf50;
+}
+
+.theme-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.5rem;
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
 }
 </style>

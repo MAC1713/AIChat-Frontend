@@ -25,6 +25,7 @@
     "moduleResolution": "Node",
     "types": ["node"],
     "allowSyntheticDefaultImports": true,
-    "lib": ["ESNext","esnext", "dom", "dom.iterable", "scripthost"]
+    "lib": ["ESNext","esnext", "dom", "dom.iterable", "scripthost"],
+    "forceConsistentCasingInFileNames" : true,
   }
 }
