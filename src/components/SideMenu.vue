@@ -17,8 +17,8 @@
 <script lang="ts">
 import { defineComponent, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useThemeStore } from '@/stores/themeStore';
-import { useUIStore } from '@/stores/uiStore';
+import { useThemeStore } from '../../src/stores/themeStore';
+import { useUIStore } from '../../src/stores/uiStore';
 
 export default defineComponent({
   name: 'SideMenu',

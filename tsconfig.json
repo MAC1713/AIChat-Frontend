@@ -10,10 +10,11 @@
   ],
   "compilerOptions" : {
     "strict": true,
+    "allowJs": true,
     "forceConsistentCasingInFileNames" : true,
-    "baseUrl": "./",
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["../../src/*"]
     },
-  }
+  },
 }

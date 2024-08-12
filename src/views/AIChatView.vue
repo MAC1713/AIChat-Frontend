@@ -50,10 +50,10 @@
 <script lang="ts">
 import { defineComponent, ref, onMounted, nextTick, watch, computed } from 'vue';
 import { sendChatMessage, type Message, type ChatResponse } from '../router/chatService';
-import SideMenu from '@/components/SideMenu.vue';
+import SideMenu from '../components/SideMenu.vue';
 import { formatSpecialText } from '../utils/textFormatter';
-import { useThemeStore } from '@/stores/themeStore';
-import { useUIStore } from '@/stores/uiStore';
+import { useThemeStore } from '../stores/themeStore';
+import { useUIStore } from '../stores/uiStore';
 
 export default defineComponent({
   name: 'AIChat',
