@@ -15,7 +15,7 @@
     <main class="chat-main" @click="closeMenu">
       <div class="chat-messages" ref="chatMessages">
         <div
-          v-for="(message, index) in messages"
+          v-for="(message, index) in chatStore.messages"
           :key="index"
           :class="['message', message.role]"
         >
@@ -49,11 +49,12 @@
 
 <script lang="ts">
 import { defineComponent, ref, onMounted, nextTick, watch, computed } from 'vue';
-import { sendChatMessage, type Message, type ChatResponse } from '../router/chatService';
+import { sendChatMessage, type Message, type ChatResponse, syncChatHistory } from '../router/chatService';
 import SideMenu from '../components/SideMenu.vue';
 import { formatSpecialText } from '../utils/textFormatter';
 import { useThemeStore } from '../stores/themeStore';
 import { useUIStore } from '../stores/uiStore';
+import { useChatStore } from '../stores/chatStore';
 
 export default defineComponent({
   name: 'AIChat',
@@ -63,6 +64,7 @@ export default defineComponent({
   setup() {
     const themeStore = useThemeStore();
     const uiStore = useUIStore();
+    const chatStore = useChatStore();
     const isDarkMode = computed(() => themeStore.isDarkMode);
     const isMenuOpen = computed(() => uiStore.isMenuOpen);
 
@@ -77,26 +79,23 @@ export default defineComponent({
       if (!userInput.value.trim()) return;
 
       const userMessage: Message = { role: 'user', content: userInput.value.trim() };
+      chatStore.addMessage(userMessage);
       userInput.value = '';
-      messages.value.push(userMessage);
+
       try {
         const response: ChatResponse = await sendChatMessage(
-          messageCount.value,
+          chatStore.messageCount,
           userMessage.content,
-          messages.value
+          chatStore.messages
         );
-        const aiMessage: Message = { role: 'assistant', content: response.aiMessage};
-        messages.value.push(aiMessage);
-        messageCount.value = response.messageCount;
+        const aiMessage: Message = { role: 'assistant', content: response.aiMessage };
+        chatStore.addMessage(aiMessage);
+        chatStore.setMessageCount(response.messageCount);
 
         await nextTick();
         scrollToBottom();
       } catch (error) {
         console.error('Error sending message:', error);
-        messages.value.push({
-          role: 'system',
-          content: 'An error occurred while sending the message. Please try again.'
-        });
       }
     };
 
@@ -145,22 +144,31 @@ export default defineComponent({
       themeStore.toggleTheme();
     };
 
-    onMounted(() => {
+    const syncHistory = async () => {
+      try {
+        await syncChatHistory(chatStore.conversationId, chatStore.messages);
+      } catch (error) {
+        console.error('Error syncing chat history:', error);
+      }
+    };
+
+    onMounted(async () => {
+      await chatStore.loadChatHistory();
       scrollToBottom();
       if (textarea.value) {
         textarea.value.addEventListener('input', adjustTextareaHeight);
       }
     });
 
-    watch(messages, () => {
+    watch(() => chatStore.messages, () => {
       nextTick(() => {
         scrollToBottom();
       });
-    });
+    }, { deep: true });
 
     return {
       userInput,
-      messages,
+      chatStore,
       sendMessage,
       chatMessages,
       isMenuOpen,
