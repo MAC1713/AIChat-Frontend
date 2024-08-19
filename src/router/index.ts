@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory, type RouteRecordRaw} from 'vue-router'
 import AIChatView from '@/views/AIChatView.vue'
+import PromptsView from '@/views/PromptsView.vue';
+import UnderConstruction from '@/views/UnderConstruction.vue'
 
 const NotesView = () => import('@/views/NotesView.vue')
-
 
 
 const routes: Array<RouteRecordRaw> = [
@@ -21,6 +22,20 @@ const routes: Array<RouteRecordRaw> = [
       name: 'notes',
       component: NotesView
     },
+    {
+      path: '/prompts',
+      name: 'prompts',
+      component: PromptsView,
+    },
+    {
+      path: '/under-construction',
+      name: 'under-construction',
+      component: UnderConstruction
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/under-construction'
+    }
   ]
 
 const router = createRouter({

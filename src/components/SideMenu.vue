@@ -4,9 +4,9 @@
     <ul>
       <li @click="navigateTo('ai-chat')">AI Chat</li>
       <li @click="navigateTo('notes')">Notes</li>
-      <li>Settings</li>
-      <li>Prompts</li>
-      <li>API Key</li>
+      <li @click="navigateTo('under-construction')">Settings</li>
+      <li @click="navigateTo('prompts')">Prompts</li>
+      <li @click="navigateTo('under-construction')">API Key</li>
     </ul>
     <button class="theme-toggle" @click="toggleTheme">
       {{ isDarkMode ? '☀️' : '🌙' }}
