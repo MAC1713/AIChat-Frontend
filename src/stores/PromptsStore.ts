@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia';
-import { PromptsService, type PromptsType, type Prompt } from '../router/PromptsService';
+import { PromptsService, type PromptsType, type Prompt, type PromptAll} from '../router/PromptsService';
 
 export const usePromptsStore = defineStore('prompts', {
   state: () => ({
-    promptsTypeList: [] as PromptsType[],
+    promptsTypeList: [] as PromptAll[],
     currentPrompt: null as Prompt | null,
   }),
 
@@ -18,6 +18,7 @@ export const usePromptsStore = defineStore('prompts', {
 
     async fetchPromptById(id: string) {
       try {
+        console.log('1')
         this.currentPrompt = await PromptsService.getPromptsById(id);
       } catch (error) {
         console.error('Error fetching prompt by id:', error);

@@ -16,8 +16,17 @@ export interface Prompt {
   tokens: number;
 }
 
+export interface PromptAll {
+  id: string;
+  promptType: string;
+  promptData: string;
+  tokens: number;
+  description: string;
+  updateTime: string;
+}
+
 export const PromptsService = {
-  async getPromptsTypeList(promptsType: Partial<PromptsType> = {}): Promise<PromptsType[]> {
+  async getPromptsTypeList(promptsType: Partial<PromptsType> = {}): Promise<PromptAll[]> {
     const response = await axios.post(`${API_URL}/promptsType/getPromptsTypeList`, promptsType);
     return response.data.result;
   },

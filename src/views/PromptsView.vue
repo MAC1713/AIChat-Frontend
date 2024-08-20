@@ -18,7 +18,7 @@
             v-for="prompt in promptsTypeList"
             :key="prompt.id"
             :prompt="prompt"
-            @click="openPrompt(prompt.promptsType)"
+            @click="openPrompt(prompt.promptType)"
           />
         </div>
         <PromptEditor
