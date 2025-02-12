@@ -3,6 +3,7 @@ import axios from 'axios';
 export interface Message {
   role: string;
   content: string;
+  error?: boolean;
 }
 
 export interface ChatResponse {
@@ -31,19 +32,14 @@ export const sendChatMessage = async (
         },
       };
 
-      const [chatResponse, notebookResponse] = await Promise.all([
+      const [chatResponse] = await Promise.all([
         axios.post<{
           head: { status: string };
           result: ChatResponse;
         }>('http://localhost:8080/api/chat/send', requestData, requestConfig),
-        axios.post<{
-          head: { status: string };
-          result: any;
-        }>('http://localhost:8080/api/chat/updateNotebook', requestData, requestConfig)
       ]);
 
       if (chatResponse.data.head.status === '200' || chatResponse.data.head.status === 'OPTIONS') {
-        console.log('Notebook update response:', notebookResponse.data);
         return chatResponse.data.result;
       } else {
         throw new Error(`API returned a non-200 status: ${chatResponse.data.head.status}`);
@@ -52,6 +48,35 @@ export const sendChatMessage = async (
       console.error('Error sending message or updating notebook:', error);
       throw error;
     }
+};
+
+export const sendToCheck = async (conversationHistory: Message[]): Promise<Message[]> => {
+  try {
+    const requestData = {
+      fullConversationHistory: conversationHistory,
+    };
+
+    const requestConfig = {
+      withCredentials: true,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+
+    const response = await axios.post<{
+      head: { status: string };
+      result: Message[];
+    }>('http://localhost:8080/api/chat/updateNotebook', requestData, requestConfig);
+
+    if (response.data.head.status === '200') {
+      return response.data.result;
+    } else {
+      throw new Error(`API returned a non-200 status: ${response.data.head.status}`);
+    }
+  } catch (error) {
+    console.error('Error updating notebook:', error);
+    throw error;
+  }
 };
 
 export const getChatHistory = async (conversationId: string): Promise<Message[] | { result: Message[] }> => {

@@ -1,31 +1,56 @@
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
-import { getChatHistory, syncChatHistory, type Message } from '../router/chatService';
+import { ref, computed } from 'vue';
+import { getChatHistory, syncChatHistory, sendToCheck, type Message } from '../router/chatService';
 
 export const useChatStore = defineStore('chat', () => {
     const conversationId = ref(localStorage.getItem('conversationId') || '');
-    const messages = ref<Message[]>([]);
+    const confirmedMessages = ref<Message[]>([]);
+    const pendingMessage = ref<Message | null>(null);
     const messageCount = ref(parseInt(localStorage.getItem('messageCount') || '0'));
+
+    const allMessages = computed(() => {
+        return pendingMessage.value 
+            ? [...confirmedMessages.value, pendingMessage.value] 
+            : confirmedMessages.value;
+    });
 
     if (!conversationId.value) {
         conversationId.value = generateUUID();
         localStorage.setItem('conversationId', conversationId.value);
     }
 
-    watch(conversationId, (newId) => {
-        localStorage.setItem('conversationId', newId);
-    });
-
     const setMessages = (newMessages: Message[]) => {
-        messages.value = newMessages;
+        confirmedMessages.value = newMessages;
         messageCount.value = newMessages.length;
         syncChatHistory(conversationId.value, newMessages);
     };
 
-    const addMessage = (message: Message) => {
-        messages.value.push(message);
+    const addPendingMessage = (message: Message) => {
+        pendingMessage.value = message;
+    };
+
+    const confirmPendingMessage = () => {
+        if (pendingMessage.value) {
+            confirmedMessages.value.push(pendingMessage.value);
+            pendingMessage.value = null;
+            messageCount.value++;
+            syncChatHistory(conversationId.value, confirmedMessages.value);
+        }
+    };
+
+    const addAIMessage = (message: Message) => {
+        confirmedMessages.value.push(message);
         messageCount.value++;
-        syncChatHistory(conversationId.value, messages.value);
+        syncChatHistory(conversationId.value, confirmedMessages.value);
+    };
+
+    const setMessageError = (index: number, isError: boolean) => {
+        if (index >= 0 && index < confirmedMessages.value.length) {
+            confirmedMessages.value[index] = { 
+                ...confirmedMessages.value[index], 
+                error: isError 
+            };
+        }
     };
 
     const setMessageCount = (count: number) => {
@@ -33,9 +58,15 @@ export const useChatStore = defineStore('chat', () => {
         localStorage.setItem('messageCount', count.toString());
     };
 
+    const updateNotebook = (newMessages: Message[]) => {
+        confirmedMessages.value = newMessages;
+        sendToCheck(newMessages);
+    };
+
     const loadChatHistory = async () => {
         try {
             const history = await getChatHistory(conversationId.value);
+            
             if (Array.isArray(history)) {
                 setMessages(history);
             } else if (history && typeof history === 'object' && 'result' in history) {
@@ -51,18 +82,27 @@ export const useChatStore = defineStore('chat', () => {
 
     const clearChat = () => {
         setMessages([]);
+        pendingMessage.value = null;
         conversationId.value = generateUUID();
+        localStorage.removeItem('messageCount');
+        messageCount.value = 0;
     };
 
     return {
         conversationId,
-        messages,
+        allMessages,
+        confirmedMessages,
+        pendingMessage,
         messageCount,
         setMessages,
-        addMessage,
+        addPendingMessage,
+        confirmPendingMessage,
+        addAIMessage,
+        setMessageError,
         setMessageCount,
         clearChat,
         loadChatHistory,
+        updateNotebook,
     };
 });
 

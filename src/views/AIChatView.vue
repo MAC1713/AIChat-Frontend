@@ -1,13 +1,18 @@
 <template>
   <div class="chat-container" :class="{ 'dark-mode': isDarkMode }">
     <header class="chat-header">
-      <button class="menu-button" @click="toggleMenu">
-        <img :src="isDarkMode ? '/menu-dark.jpg' : '/menu-light.jpg'" alt="Menu" />
-      </button>
-      <h1>AI Chat</h1>
-      <button class="theme-toggle" @click="toggleTheme">
-        {{ isDarkMode ? '☀️' : '🌙' }}
-      </button>
+      <div class="left-section">
+        <button class="menu-button" @click="toggleMenu">
+          <img :src="isDarkMode ? '/menu-dark.jpg' : '/menu-light.jpg'" alt="Menu" />
+        </button>
+        <h1>AI Chat</h1>
+      </div>
+      <div class="right-section">
+        <button class="icon-button clear-chat" @click="clearChat" title="Clear Chat">🗑️</button>
+        <button class="icon-button theme-toggle" @click="toggleTheme" title="Toggle Theme">
+          {{ isDarkMode ? '🌙' : '☀️' }}
+        </button>
+      </div>
     </header>
 
     <side-menu />
@@ -15,9 +20,9 @@
     <main class="chat-main" @click="closeMenu">
       <div class="chat-messages" ref="chatMessages">
         <div
-          v-for="(message, index) in chatStore.messages"
+          v-for="(message, index) in chatStore.allMessages"
           :key="index"
-          :class="['message', message.role]"
+          :class="['message', message.role, { 'error': message.error }]"
         >
           <img
             v-if="message.role === 'assistant'"
@@ -26,6 +31,7 @@
             class="avatar"
           />
           <div class="message-content" v-html="formatMessage(message.content)"></div>
+          <button v-if="message.error" @click="resendMessage(index)" class="resend-button">🔄</button>
         </div>
       </div>
     </main>
@@ -69,8 +75,6 @@ export default defineComponent({
     const isMenuOpen = computed(() => uiStore.isMenuOpen);
 
     const userInput = ref('');
-    const messages = ref<Message[]>([]);
-    const messageCount = ref(0);
     const chatMessages = ref<HTMLDivElement | null>(null);
     const isComposing = ref(false);
     const textarea = ref<HTMLTextAreaElement | null>(null);
@@ -79,24 +83,51 @@ export default defineComponent({
       if (!userInput.value.trim()) return;
 
       const userMessage: Message = { role: 'user', content: userInput.value.trim() };
-      chatStore.addMessage(userMessage);
+      chatStore.addPendingMessage(userMessage);
       userInput.value = '';
 
       try {
         const response: ChatResponse = await sendChatMessage(
           chatStore.messageCount,
           userMessage.content,
-          chatStore.messages
+          chatStore.confirmedMessages
         );
+        chatStore.confirmPendingMessage();
         const aiMessage: Message = { role: 'assistant', content: response.aiMessage };
-        chatStore.addMessage(aiMessage);
+        chatStore.addAIMessage(aiMessage);
         chatStore.setMessageCount(response.messageCount);
-
-        await nextTick();
-        scrollToBottom();
+        chatStore.updateNotebook(response.fullConversationHistory);
       } catch (error) {
         console.error('Error sending message:', error);
+        chatStore.setMessageError(chatStore.confirmedMessages.length - 1, true);
       }
+
+      await nextTick();
+      scrollToBottom();
+    };
+
+    const resendMessage = async (index: number) => {
+      const message = chatStore.confirmedMessages[index];
+      if (message.role !== 'user') return;
+
+      chatStore.setMessageError(index, false);
+      try {
+        const response: ChatResponse = await sendChatMessage(
+          chatStore.messageCount,
+          message.content,
+          chatStore.confirmedMessages.slice(0, index)
+        );
+        const aiMessage: Message = { role: 'assistant', content: response.aiMessage };
+        chatStore.addAIMessage(aiMessage);
+        chatStore.setMessageCount(response.messageCount);
+        chatStore.updateNotebook(response.fullConversationHistory);
+      } catch (error) {
+        console.error('Error resending message:', error);
+        chatStore.setMessageError(index, true);
+      }
+
+      await nextTick();
+      scrollToBottom();
     };
 
     const scrollToBottom = () => {
@@ -120,9 +151,9 @@ export default defineComponent({
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-      
+
       const contentWithLineBreaks = escapedContent.replace(/\n/g, '<br>');
-      
+
       return formatSpecialText(contentWithLineBreaks);
     };
 
@@ -144,12 +175,8 @@ export default defineComponent({
       themeStore.toggleTheme();
     };
 
-    const syncHistory = async () => {
-      try {
-        await syncChatHistory(chatStore.conversationId, chatStore.messages);
-      } catch (error) {
-        console.error('Error syncing chat history:', error);
-      }
+    const clearChat = () => {
+      chatStore.clearChat();
     };
 
     onMounted(async () => {
@@ -160,7 +187,7 @@ export default defineComponent({
       }
     });
 
-    watch(() => chatStore.messages, () => {
+    watch(() => chatStore.allMessages, () => {
       nextTick(() => {
         scrollToBottom();
       });
@@ -170,6 +197,7 @@ export default defineComponent({
       userInput,
       chatStore,
       sendMessage,
+      resendMessage,
       chatMessages,
       isMenuOpen,
       toggleMenu,
@@ -180,6 +208,7 @@ export default defineComponent({
       textarea,
       isDarkMode,
       toggleTheme,
+      clearChat,
     };
   },
 });
@@ -213,6 +242,26 @@ export default defineComponent({
     transition: background-color 0.3s, border-color 0.3s;
   }
 
+  .left-section, .right-section {
+    display: flex;
+    align-items: center;
+  }
+
+  .icon-button {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    margin-left: 10px;
+    padding: 5px;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+  }
+
+  .icon-button:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
   .dark-mode .chat-header {
     background-color: #16213e;
     border-bottom-color: #444;
@@ -234,6 +283,36 @@ export default defineComponent({
     width: 61px;
     height: 61px;
     transition: filter 0.3s ease;
+  }
+
+  .clear-chat, .theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .resend-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 5px;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+    margin-left: 10px;
+  }
+
+  .resend-button:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .message.error {
+    border-left: 3px solid #ff4d4f;
+    background-color: rgba(255, 77, 79, 0.1);
+  }
+
+  .message.error .message-content {
+    color: #cf1322;
   }
 
   .chat-main {
